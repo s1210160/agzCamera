@@ -7,7 +7,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 
-static const int src_img_rows = 700;
+static const int src_img_rows = 800;
 static const int src_img_cols = 800;
 
 using namespace cv;
@@ -19,8 +19,9 @@ void getCoordinates(int event, int x, int y, int flags, void* param);
 Mat undist(Mat);
 double get_points_distance(Point2i, Point2i);
 void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget, cv::Mat& dst_img);
-std::string move_direction(cv::Point2i Current, cv::Point2i Previous, cv::Point2i Target);
+std::string robot_action(cv::Point2i Current, cv::Point2i Previous, cv::Point2i Target);
 bool is_update_target(cv::Point2i Current, cv::Point2i Target);
+std::string is_out(cv::Point2i Robot);
 void colorExtraction(cv::Mat* src, cv::Mat* dst,
 	int code,
 	int ch1Lower, int ch1Upper,
@@ -30,33 +31,33 @@ void colorExtraction(cv::Mat* src, cv::Mat* dst,
 
 Mat image1;
 Mat src_img, src_frame;
-Mat element = Mat::ones(3, 3, CV_8UC1); //@comment ’Ç‰Á@3~3‚Ìs—ñ‚Å—v‘f‚Í‚·‚×‚Ä1@dilateˆ—‚É•K—v‚Ès—ñ
+Mat element = Mat::ones(3, 3, CV_8UC1); //@comment è¿½åŠ ã€€3Ã—3ã®è¡Œåˆ—ã§è¦ç´ ã¯ã™ã¹ã¦1ã€€dilateå‡¦ç†ã«å¿…è¦ãªè¡Œåˆ—
 int Ax, Ay, Bx, By, Cx, Cy, Dx, Dy;
 int Tr, Tg, Tb;
-Point2i pre_point; //@comment Point\‘¢‘Ì<intŒ^>
+Point2i pre_point; //@comment Pointæ§‹é€ ä½“<intå‹>
 
 int flag = 0;
 //int ct = 0;
 Mat dst_img, colorExtra;
 
 ofstream ofs("out4.csv");
-//@“®‰æo—Í—p•Ï”
+//@å‹•ç”»å‡ºåŠ›ç”¨å¤‰æ•°
 const string  str = "test.avi";
 
 Point2i target, P0 = { 0, 0 }, P1 = { 0, 0 };
 std::vector<Point2i> allTarget;
 std::vector<Point2i>::iterator target_itr;
 string action;
-
+Point2i a, b, c, d;	//å†…å´é ˜åŸŸã®é ‚ç‚¹
 
 int main(int argc, char *argv[])
 {
 
-	//@comment ƒJƒƒ‰‚ÌŒÄ‚Ño‚µ pc‚ÌƒJƒƒ‰ : 0 webƒJƒƒ‰ : 1 
+	//@comment ã‚«ãƒ¡ãƒ©ã®å‘¼ã³å‡ºã— pcã®ã‚«ãƒ¡ãƒ© : 0 webã‚«ãƒ¡ãƒ© : 1 
 	VideoCapture cap(1);
-	cap.set(CV_CAP_PROP_FRAME_WIDTH, 640); //@comment webƒJƒƒ‰‚Ì‰¡•‚ğİ’è
-	cap.set(CV_CAP_PROP_FRAME_HEIGHT, 480); //@comment webƒJƒƒ‰‚Ìc•‚ğİ’è
-	if (!cap.isOpened()) return -1; //@comment ŒÄ‚Ño‚µƒ~ƒX‚ª‚ ‚ê‚ÎI—¹
+	cap.set(CV_CAP_PROP_FRAME_WIDTH, 640); //@comment webã‚«ãƒ¡ãƒ©ã®æ¨ªå¹…ã‚’è¨­å®š
+	cap.set(CV_CAP_PROP_FRAME_HEIGHT, 480); //@comment webã‚«ãƒ¡ãƒ©ã®ç¸¦å¹…ã‚’è¨­å®š
+	if (!cap.isOpened()) return -1; //@comment å‘¼ã³å‡ºã—ãƒŸã‚¹ãŒã‚ã‚Œã°çµ‚äº†
 
 	VideoWriter write("out2.avi", CV_FOURCC('M', 'J', 'P', 'G'), cap.get(CV_CAP_PROP_FPS),
 		cv::Size(src_frame.rows, src_frame.cols), true);
@@ -68,37 +69,37 @@ int main(int argc, char *argv[])
 	namedWindow("test1", 1);
 	namedWindow("binari", 1);
 
-	cap >> src_frame; //@comment 1ƒtƒŒ[ƒ€æ“¾
-	resize(src_frame, src_frame, Size(src_img_cols, src_img_rows), CV_8UC3); //@æ“¾‰æ‘œ‚ÌƒŠƒTƒCƒY
-	//src_img = undist(src_img) ; //@comment ƒJƒƒ‰‚Ì˜c‚İ‚ğ‚Æ‚é(GoPro‹›Šá)
+	cap >> src_frame; //@comment 1ãƒ•ãƒ¬ãƒ¼ãƒ å–å¾—
+	resize(src_frame, src_frame, Size(src_img_cols, src_img_rows), CV_8UC3); //@å–å¾—ç”»åƒã®ãƒªã‚µã‚¤ã‚º
+	//src_img = undist(src_img) ; //@comment ã‚«ãƒ¡ãƒ©ã®æ­ªã¿ã‚’ã¨ã‚‹(GoProé­šçœ¼)
 
 
-	//------------------À•Wæ“¾-----------------------------------------------
-	//@comment ‰æ‘œ’†‚©‚çƒ}ƒEƒX‚Å4“_‚ğæ“¾‚»‚ÌŒãESCƒL[‚ğ‰Ÿ‚·‚Æ•ÏŠ·ˆ—‚ªŠJn‚·‚é
+	//------------------åº§æ¨™å–å¾—-----------------------------------------------
+	//@comment ç”»åƒä¸­ã‹ã‚‰ãƒã‚¦ã‚¹ã§4ç‚¹ã‚’å–å¾—ãã®å¾ŒESCã‚­ãƒ¼ã‚’æŠ¼ã™ã¨å¤‰æ›å‡¦ç†ãŒé–‹å§‹ã™ã‚‹
 
 	namedWindow("getCoordinates");
 	imshow("getCoordinates", src_frame);
-	//@comment •ÏŠ·‚µ‚½‚¢lŠpŒ`‚Ìl‹÷‚ÌÀ•W‚ğ‚Æ‚é(ƒNƒŠƒbƒN)
+	//@comment å¤‰æ›ã—ãŸã„å››è§’å½¢ã®å››éš…ã®åº§æ¨™ã‚’ã¨ã‚‹(ã‚¯ãƒªãƒƒã‚¯)
 	cvSetMouseCallback("getCoordinates", getCoordinates, NULL);
 	waitKey(0);
 	destroyAllWindows();
 
 
-	//------------------“§‹•ÏŠ·-----------------------------------------------
+	//------------------é€è¦–å¤‰æ›-----------------------------------------------
 	Point2f pts1[] = { Point2f(Ax, Ay), Point2f(Bx, By),
 		Point2f(Cx, Cy), Point2f(Dx, Dy) };
 
 	Point2f pts2[] = { Point2f(0, src_img_rows), Point2f(0, 0),
 		Point2f(src_img_cols, 0), Point2f(src_img_cols, src_img_rows) };
 
-	//@comment “§‹•ÏŠ·s—ñ‚ğŒvZ
+	//@comment é€è¦–å¤‰æ›è¡Œåˆ—ã‚’è¨ˆç®—
 	Mat perspective_matrix = getPerspectiveTransform(pts1, pts2);
 	Mat dst_img, colorExtra;
 
-	//@comment •ÏŠ·(üŒ`•âŠ®)
+	//@comment å¤‰æ›(ç·šå½¢è£œå®Œ)
 	warpPerspective(src_frame, dst_img, perspective_matrix, src_frame.size(), INTER_LINEAR);
 
-	//@comment •ÏŠ·‘OŒã‚ÌÀ•W‚ğ•`‰æ
+	//@comment å¤‰æ›å‰å¾Œã®åº§æ¨™ã‚’æç”»
 	line(src_frame, pts1[0], pts1[1], Scalar(255, 0, 255), 2, CV_AA);
 	line(src_frame, pts1[1], pts1[2], Scalar(255, 255, 0), 2, CV_AA);
 	line(src_frame, pts1[2], pts1[3], Scalar(255, 255, 0), 2, CV_AA);
@@ -115,7 +116,7 @@ int main(int argc, char *argv[])
 	imshow("dst", dst_img);
 
 
-	int frame = 0; //@comment ƒtƒŒ[ƒ€”•Û•Ï”
+	int frame = 0; //@comment ãƒ•ãƒ¬ãƒ¼ãƒ æ•°ä¿æŒå¤‰æ•°
 
 	set_target(target, allTarget, dst_img);
 	target_itr = allTarget.begin();
@@ -123,69 +124,68 @@ int main(int argc, char *argv[])
 	while (1){
 
 		if (target_itr == allTarget.end()){
-			std::cout << "oooooooooooooooooooooooooooooooooooout" << std::endl;
-			break;
+			target_itr = allTarget.begin();
 		}
 
 		cap >> src_frame;
 
-		if (frame % 15 == 0){ //@comment@ƒtƒŒ[ƒ€‚Ìæ“¾”‚ğ’²ß‰Â”\
+		if (frame % 15 == 0){ //@commentã€€ãƒ•ãƒ¬ãƒ¼ãƒ ã®å–å¾—æ•°ã‚’èª¿ç¯€å¯èƒ½
 
-			//@comment ‰æ‘œ‚ğƒŠƒTƒCƒY(‘å‚«‚·‚¬‚é‚ÆƒfƒBƒXƒvƒŒƒC‚É“ü‚è‚ç‚È‚¢‚½‚ß)
+			//@comment ç”»åƒã‚’ãƒªã‚µã‚¤ã‚º(å¤§ãã™ãã‚‹ã¨ãƒ‡ã‚£ã‚¹ãƒ—ãƒ¬ã‚¤ã«å…¥ã‚Šã‚‰ãªã„ãŸã‚)
 			resize(src_frame, src_frame, Size(src_img_cols, src_img_rows), CV_8UC3);
-			//src_frame = undist(src_frame); //@comment ƒJƒƒ‰‚Ì˜c‚İ‚ğ‚Æ‚é(GoPro‹›Šá)
+			//src_frame = undist(src_frame); //@comment ã‚«ãƒ¡ãƒ©ã®æ­ªã¿ã‚’ã¨ã‚‹(GoProé­šçœ¼)
 
-			//--------------------ƒOƒŒ[ƒXƒP[ƒ‹‰»---------------------------------------
+			//--------------------ã‚°ãƒ¬ãƒ¼ã‚¹ã‚±ãƒ¼ãƒ«åŒ–---------------------------------------
 
-			//•ÏŠ·(üŒ`•âŠ®)
+			//å¤‰æ›(ç·šå½¢è£œå®Œ)
 			warpPerspective(src_frame, dst_img, perspective_matrix, src_frame.size(), INTER_LINEAR);
-			//@comment hsv‚ğ—˜—p‚µ‚ÄÔF‚ğ’Šo
-			//“ü—Í‰æ‘œAo—Í‰æ‘œA•ÏŠ·AhÅ¬’lAhÅ‘å’lAsÅ¬’lAsÅ‘å’lAvÅ¬’lAvÅ‘å’l
+			//@comment hsvã‚’åˆ©ç”¨ã—ã¦èµ¤è‰²ã‚’æŠ½å‡º
+			//å…¥åŠ›ç”»åƒã€å‡ºåŠ›ç”»åƒã€å¤‰æ›ã€hæœ€å°å€¤ã€hæœ€å¤§å€¤ã€sæœ€å°å€¤ã€sæœ€å¤§å€¤ã€væœ€å°å€¤ã€væœ€å¤§å€¤
 			colorExtraction(&dst_img, &colorExtra, CV_BGR2HSV, 150, 180, 70, 255, 70, 255);
-			cvtColor(colorExtra, colorExtra, CV_BGR2GRAY);//@comment ƒOƒŒ[ƒXƒP[ƒ‹‚É•ÏŠ·
+			cvtColor(colorExtra, colorExtra, CV_BGR2GRAY);//@comment ã‚°ãƒ¬ãƒ¼ã‚¹ã‚±ãƒ¼ãƒ«ã«å¤‰æ›
 
 
-			//‚Q’l‰»
-			//------------------‚µ‚«‚¢’l–Ú‘ª—p--------------------------------------------
+			//ï¼’å€¤åŒ–
+			//------------------ã—ãã„å€¤ç›®æ¸¬ç”¨--------------------------------------------
 			Mat binari_2;
 
-			//----------------------“ñ’l‰»-----------------------------------------------
+			//----------------------äºŒå€¤åŒ–-----------------------------------------------
 			threshold(colorExtra, binari_2, 0, 255, THRESH_BINARY);
-			dilate(binari_2, binari_2, element, Point(-1, -1), 3); //–c’£ˆ—3‰ñ ÅŒã‚Ìˆø”‚Å‰ñ”‚ğİ’è
+			dilate(binari_2, binari_2, element, Point(-1, -1), 3); //è†¨å¼µå‡¦ç†3å› æœ€å¾Œã®å¼•æ•°ã§å›æ•°ã‚’è¨­å®š
 
-			//---------------------dSæ“¾---------------------------------------------
-			Point2i point = calculate_center(binari_2);//@comment moment‚Å”’F•”•ª‚ÌdS‚ğ‹‚ß‚é
-			//cout << "posion: " << point.x << " " << point.y << endl;//@comment dS“_‚Ì•\¦
+			//---------------------é‡å¿ƒå–å¾—---------------------------------------------
+			Point2i point = calculate_center(binari_2);//@comment momentã§ç™½è‰²éƒ¨åˆ†ã®é‡å¿ƒã‚’æ±‚ã‚ã‚‹
+			//cout << "posion: " << point.x << " " << point.y << endl;//@comment é‡å¿ƒç‚¹ã®è¡¨ç¤º
 			int ypos;
 			if (point.x != 0){
 				ypos = src_img_rows - (point.y + 6 * ((1000 / point.y) + 1));
-				//cout << point.x << " " << ypos << endl; //@comment •ÏŠ·‰æ‘œ’†‚Å‚Ìƒƒ{ƒbƒg‚ÌÀ•W(dS)
-				ofs << point.x << ", " << ypos << endl; //@comment •ÏŠ·
+				//cout << point.x << " " << ypos << endl; //@comment å¤‰æ›ç”»åƒä¸­ã§ã®ãƒ­ãƒœãƒƒãƒˆã®åº§æ¨™(é‡å¿ƒ)
+				ofs << point.x << ", " << ypos << endl; //@comment å¤‰æ›
 			}
 
-			//---------------------ƒƒ{ƒbƒg‚Ì“®ìæ“¾------------------------------------
-			P1.x = point.x;	P1.y = src_img_rows-ypos;
+			//---------------------ãƒ­ãƒœãƒƒãƒˆã®å‹•ä½œå–å¾—------------------------------------
+			P1 = { point.x, src_img_rows - ypos };
 			if (target_itr != allTarget.end() &&P1.x != 0 && P1.y != 0 && P0.x != 0 && P0.y != 0){
 				line(dst_img, P1, P0, Scalar(255, 0, 0), 2, CV_AA);
 			if (is_update_target(P1, *target_itr)){
-					// ƒ^[ƒQƒbƒg‚ÌXV
+					// ã‚¿ãƒ¼ã‚²ãƒƒãƒˆã®æ›´æ–°
 				std::cout << "UPDATE" << std::endl;
 					target_itr++;
 				}
-			action = move_direction(P0, P1, *target_itr);
+			action = robot_action(P0, P1, *target_itr);
 			std::cout << "target: " << target_itr->x << ", " << target_itr->y << "	position: " << P1.x << ", " << P1.y
-				<< "	move: " << action << std::endl;
+				<< is_out(P1) << action << std::endl;
 			}
 			P0 = P1;
+
 			
-			//-------------------dS“_‚Ìƒvƒƒbƒg----------------------------------------- 
-			if (!point.y == 0){ //@comment point.y == 0‚Ìê‡‚Íexception‚ª‹N‚±‚é( 0œZ )
-				//@comment ‰æ‘œC‰~‚Ì’†SÀ•WC”¼ŒaCF(Â)Cü‘¾‚³Cí—Ş(-1, CV_AA‚Í“h‚è‚Â‚Ô‚µ)
+			//-------------------é‡å¿ƒç‚¹ã®ãƒ—ãƒ­ãƒƒãƒˆ----------------------------------------- 
+			if (!point.y == 0){ //@comment point.y == 0ã®å ´åˆã¯exceptionãŒèµ·ã“ã‚‹( 0é™¤ç®— )
+				//@comment ç”»åƒï¼Œå††ã®ä¸­å¿ƒåº§æ¨™ï¼ŒåŠå¾„ï¼Œè‰²(é’)ï¼Œç·šå¤ªã•ï¼Œç¨®é¡(-1, CV_AAã¯å¡—ã‚Šã¤ã¶ã—)
 				circle(dst_img, Point(point.x, point.y + 6 * ((1000 / point.y) + 1)), 8, Scalar(0, 0, 0), -1, CV_AA);
-				cv::putText(dst_img, action, cv::Point(point.x, point.y + 6 * ((1000 / point.y) + 1)), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 0), 1.0, CV_AA);
 			}
 
-			//------------------ƒ^[ƒQƒbƒg‚Ìƒvƒƒbƒg--------------------------------------
+			//------------------ã‚¿ãƒ¼ã‚²ãƒƒãƒˆã®ãƒ—ãƒ­ãƒƒãƒˆ--------------------------------------
 			int n = 0;
 			for (vector<Point2i>::iterator itr = allTarget.begin(); itr != allTarget.end(); itr++){
 				cv::circle(dst_img, cv::Point(*itr), 48, cv::Scalar(255, 255, 0), 3, 4);
@@ -194,16 +194,19 @@ int main(int argc, char *argv[])
 			}
 			cv::circle(dst_img, cv::Point(*target_itr), 48, cv::Scalar(0, 0, 0), 3, 4);
 
-			//---------------------•\¦•”•ª----------------------------------------------
+			cv::putText(dst_img, is_out(P1), cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 1.0, CV_AA);
+			cv::putText(dst_img, action, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 1.0, CV_AA);
 
-			//‘I‘ğ‚µ‚½l‹÷‚ğü‚ÅŒ‹‚Ô
+			//---------------------è¡¨ç¤ºéƒ¨åˆ†----------------------------------------------
+
+			//é¸æŠã—ãŸå››éš…ã‚’ç·šã§çµã¶
 			//line(dst_img, Point(Ax, Ay), Point(Bx, By), Scalar(200, 0, 0), 3);
 			//line(dst_img, Point(Bx, By), Point(Cx, Cy), Scalar(0, 200, 0), 3);
 			//line(dst_img, Point(Cx, Cy), Point(Dx, Dy), Scalar(200, 0, 0), 3);
 			//line(dst_img, Point(Dx, Dy), Point(Ax, Ay), Scalar(0, 200, 0), 3);
 
 			//imshow("drawing", src_img);
-			//---------------------•ÏŠ·Œã‚Ì‰æ‘œ‚É1ml•û‚Ì¡–ÚŒ`¬----------------------------
+			//---------------------å¤‰æ›å¾Œã®ç”»åƒã«1må››æ–¹ã®å‡ç›®å½¢æˆ----------------------------
 
 			//imshow("dst_img", dst_img);
 
@@ -217,16 +220,16 @@ int main(int argc, char *argv[])
 				}
 			}
 
-			//“à‘¤—Ìˆæ‚ÆŠO‘¤—Ìˆæ‚Ìì¬
+			//å†…å´é ˜åŸŸã¨å¤–å´é ˜åŸŸã®ä½œæˆ
 			line(dst_img, Point(100, 100), Point(100, src_img_cols), Scalar(200, 0, 0), 2);
 			line(dst_img, Point(100, 100), Point(src_img_rows, 100), Scalar(200, 0, 0), 2);
 			line(dst_img, Point(src_img_rows, 100), Point(src_img_rows, src_img_cols), Scalar(200, 0, 0), 2);
 			line(dst_img, Point(100, src_img_cols - 100), Point(src_img_rows, src_img_cols - 100), Scalar(200, 0, 0), 2);
 
 			//imshow("video", src_frame);
-			imshow("red_point", dst_img);//@comment o—Í‰æ‘œ
-			imshow("colorExt", colorExtra);//@comment Ô’Šo‰æ‘œ
-			//cout << "frame" << ct++ << endl; //@comment frame”•\¦
+			imshow("red_point", dst_img);//@comment å‡ºåŠ›ç”»åƒ
+			imshow("colorExt", colorExtra);//@comment èµ¤æŠ½å‡ºç”»åƒ
+			//cout << "frame" << ct++ << endl; //@comment frameæ•°è¡¨ç¤º
 			//write << dst_img;
 			std::cout << frame << std::endl;
 			if (src_frame.empty() || waitKey(30) >= 0)
@@ -238,19 +241,17 @@ int main(int argc, char *argv[])
 		frame++;
 		write << dst_img;
 	}
-	ofs.close(); //@comment ƒtƒ@ƒCƒ‹ƒXƒgƒŠ[ƒ€‚Ì‰ğ•ú
-
-	while (1){}
+	ofs.close(); //@comment ãƒ•ã‚¡ã‚¤ãƒ«ã‚¹ãƒˆãƒªãƒ¼ãƒ ã®è§£æ”¾
 }
 
-//@comment 2“_ŠÔ‚Ì‹——£æ“¾ŠÖ”
+//@comment 2ç‚¹é–“ã®è·é›¢å–å¾—é–¢æ•°
 double get_points_distance(Point2i point, Point2i pre_point){
 
 	return sqrt((point.x - pre_point.x) * (point.x - pre_point.x)
 		+ (point.y - pre_point.y) * (point.y - pre_point.y));
 }
 
-//@comment dSæ“¾—pŠÖ”
+//@comment é‡å¿ƒå–å¾—ç”¨é–¢æ•°
 Point2i calculate_center(Mat gray)
 {
 
@@ -267,13 +268,13 @@ Point2i calculate_center(Mat gray)
 	return center;
 }
 
-//@comment “ü—Í‰æ‘œ‚©‚ç4“_‚ğİ’è‚·‚éŠÖ”
+//@comment å…¥åŠ›ç”»åƒã‹ã‚‰4ç‚¹ã‚’è¨­å®šã™ã‚‹é–¢æ•°
 void getCoordinates(int event, int x, int y, int flags, void* param)
 {
 
 	static int count = 0;
 	switch (event){
-	case CV_EVENT_LBUTTONDOWN://@comment ¶ƒNƒŠƒbƒN‚ª‰Ÿ‚³‚ê‚½
+	case CV_EVENT_LBUTTONDOWN://@comment å·¦ã‚¯ãƒªãƒƒã‚¯ãŒæŠ¼ã•ã‚ŒãŸæ™‚
 
 		if (count == 0){
 			Ax = x, Ay = y;
@@ -307,26 +308,26 @@ void getCoordinates(int event, int x, int y, int flags, void* param)
 		break;
 	}
 }
-//@comment ƒJƒƒ‰ƒLƒƒƒŠƒuƒŒ[ƒVƒ‡ƒ“—pŠÖ”(gopro—p)
+//@comment ã‚«ãƒ¡ãƒ©ã‚­ãƒ£ãƒªãƒ–ãƒ¬ãƒ¼ã‚·ãƒ§ãƒ³ç”¨é–¢æ•°(goproç”¨)
 Mat undist(Mat src_img)
 {
 	Mat dst_img;
 
-	//@comment ƒJƒƒ‰ƒ}ƒgƒŠƒbƒNƒX(gopro)
+	//@comment ã‚«ãƒ¡ãƒ©ãƒãƒˆãƒªãƒƒã‚¯ã‚¹(gopro)
 	Mat cameraMatrix = (Mat_<double>(3, 3) << 469.96, 0, 400, 0, 467.68, 300, 0, 0, 1);
-	//@comment ˜c‚İs—ñ(gopro)
+	//@comment æ­ªã¿è¡Œåˆ—(gopro)
 	Mat distcoeffs = (Mat_<double>(1, 5) << -0.18957, 0.037319, 0, 0, -0.00337);
 
 	undistort(src_img, dst_img, cameraMatrix, distcoeffs);
 	return dst_img;
 }
 
-//@comment F’Šo—pŠÖ” 
+//@comment è‰²æŠ½å‡ºç”¨é–¢æ•° 
 void colorExtraction(cv::Mat* src, cv::Mat* dst,
 	int code,
-	int ch1Lower, int ch1Upper, //@comment H(F‘Š)@Å¬AÅ‘å
-	int ch2Lower, int ch2Upper, //@comment S(Ê“x)@Å¬AÅ‘å
-	int ch3Lower, int ch3Upper  //@comment V(–¾“x)@Å¬AÅ‘å
+	int ch1Lower, int ch1Upper, //@comment H(è‰²ç›¸)ã€€æœ€å°ã€æœ€å¤§
+	int ch2Lower, int ch2Upper, //@comment S(å½©åº¦)ã€€æœ€å°ã€æœ€å¤§
+	int ch3Lower, int ch3Upper  //@comment V(æ˜åº¦)ã€€æœ€å°ã€æœ€å¤§
 	)
 {
 	cv::Mat colorImage;
@@ -365,26 +366,26 @@ void colorExtraction(cv::Mat* src, cv::Mat* dst,
 			}
 		}
 	}
-	//@comment LUT‚ğg—p‚µ‚Ä“ñ’l‰»
+	//@comment LUTã‚’ä½¿ç”¨ã—ã¦äºŒå€¤åŒ–
 	cv::LUT(colorImage, lut, colorImage);
 
-	//@comment Channel–ˆ‚É•ª‰ğ
+	//@comment Channelæ¯ã«åˆ†è§£
 	std::vector<cv::Mat> planes;
 	cv::split(colorImage, planes);
 
-	//@comment ƒ}ƒXƒN‚ğì¬
+	//@comment ãƒã‚¹ã‚¯ã‚’ä½œæˆ
 	cv::Mat maskImage;
 	cv::bitwise_and(planes[0], planes[1], maskImage);
 	cv::bitwise_and(maskImage, planes[2], maskImage);
 
-	//@comemnt o—Í
+	//@comemnt å‡ºåŠ›
 	cv::Mat maskedImage;
 	src->copyTo(maskedImage, maskImage);
 	*dst = maskedImage;
 
 }
 
-//@comment ƒ^[ƒQƒbƒgİ’è
+//@comment ã‚¿ãƒ¼ã‚²ãƒƒãƒˆè¨­å®š
 void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget, cv::Mat& dst_img){
 
 	int width = dst_img.rows;
@@ -392,7 +393,7 @@ void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget, cv::Mat
 	allTarget.clear();
 
 	int n = 0;
-	for (int j = 0; j < (width / 100) - 1; j++){
+	for (int j = 0; j < (width / 100) - 2; j++){
 		if (j % 2 == 0){
 			for (int i = 0; i < (height / 100) - 2; i++){
 				target.x = (i + 1) * width / (width / 100) + 50;	target.y = 800 - (j + 1) * height / (height / 100) - 50;
@@ -410,10 +411,13 @@ void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget, cv::Mat
 	}
 }
 
-//@comment ƒƒ{ƒbƒg‚Ì“®ìŒˆ’èŠÖ”
-std::string move_direction(cv::Point2i Current, cv::Point2i Previous, cv::Point2i Target){
+//@comment ãƒ­ãƒœãƒƒãƒˆã®å‹•ä½œæ±ºå®šé–¢æ•°
+std::string robot_action(cv::Point2i Current, cv::Point2i Previous, cv::Point2i Target){
 	cv::Point2i P0 = Current - Previous;
 	cv::Point2i P1 = Target - Current;
+
+	int dx1 = abs(Current.x - 100);
+	int dx2 = abs(Current.x - src_img_rows-100);
 
 	double angle = asin(P0.cross(P1) / (sqrt(P0.x * P0.x + P0.y * P0.y) * sqrt(P1.x * P1.x + P1.y * P1.y))) / CV_PI * 180;
 	if (P0.dot(P1) >= 0){
@@ -429,25 +433,52 @@ std::string move_direction(cv::Point2i Current, cv::Point2i Previous, cv::Point2
 		return std::string("f");
 	}
 	else if (angle <= -30){
-		return std::string("r");
+		if ((dx1 < 50.0) || (dx2 < 50.0)){
+			return std::string("r (fast)");
+		}
+		else return std::string("r (slow)");
 	}
 	else{
-		return std::string("l");
+		if ((dx1 < 50.0) || (dx2 < 50.0)){
+			return std::string("l (fast)");
+		}
+		else return std::string("l (slow)");
 	}
 }
 
-//@comment true->ƒ^[ƒQƒbƒgXV, false->ƒ^[ƒQƒbƒgXV‚È‚µ
+//@comment true->ã‚¿ãƒ¼ã‚²ãƒƒãƒˆæ›´æ–°, false->ã‚¿ãƒ¼ã‚²ãƒƒãƒˆæ›´æ–°ãªã—
 bool is_update_target(cv::Point2i Current, cv::Point2i Target){
 	//Target.y = src_img_rows - Target.y;
 	int dx = Current.x - Target.x;
 	int dy = Current.y - Target.y;
 	double d = sqrt(dx * dx + dy * dy);
 
-	std::cout << "test " << d << endl;
-
 	if (d < 50.0){
-		std::cout << "TRUEEEEEEEEEEEEEEEEEEEE" << std::endl;
 		return true;
 	}
 	else return false;
+}
+
+std::string is_out(cv::Point2i Robot){
+	cv::Point2i A = { 100, src_img_rows - 100 }, B = { 100, 100 }, C = { src_img_cols - 100, 100 }, D = { src_img_cols - 100, src_img_rows - 100 };
+	cv::Point2i BA = A - B, BC = C - B, BP = Robot - B;
+	cv::Point2i DC = C - D, DA = A - D, DP = Robot - D;
+	int c1, c2, c3, c4;
+	bool flag1=false, flag2=false;
+
+	c1 = BA.cross(BP);
+	c2 = BP.cross(BC);
+	c3 = DC.cross(DP);
+	c4 = DP.cross(DA);
+
+	if ((c1 >= 0 && c2 >= 0) || (c1 < 0 && c2 < 0)){
+		flag1 = true;
+	}
+	if ((c3 >= 0 && c4 >= 0) || (c3< 0 && c4 < 0)){
+		flag2 = true;
+	}
+	if (flag1 && flag2){
+		return "IN";
+	}
+	else return "OUT";
 }
