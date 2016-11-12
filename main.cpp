@@ -8,7 +8,7 @@
 #include <opencv2/opencv.hpp>
 
 static const int src_img_rows = 800;
-static const int src_img_cols = 800;
+static const int src_img_cols = 600;
 
 using namespace cv;
 using namespace std;
@@ -18,8 +18,8 @@ Point2i calculate_center(Mat);
 void getCoordinates(int event, int x, int y, int flags, void* param);
 Mat undist(Mat);
 double get_points_distance(Point2i, Point2i);
-void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget, cv::Mat& dst_img);
-std::string move_direction(cv::Point2i Current, cv::Point2i Previous, cv::Point2i Target);
+void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget);
+std::string robot_action(cv::Point2i Current, cv::Point2i Previous, cv::Point2i Target);
 bool is_update_target(cv::Point2i Current, cv::Point2i Target);
 std::string is_out(cv::Point2i Robot);
 void colorExtraction(cv::Mat* src, cv::Mat* dst,
@@ -70,6 +70,10 @@ int main(int argc, char *argv[])
 	namedWindow("binari", 1);
 
 	cap >> src_frame; //@comment 1フレーム取得
+	cap >> src_frame;
+	cap >> src_frame;
+	cap >> src_frame;
+
 	resize(src_frame, src_frame, Size(src_img_cols, src_img_rows), CV_8UC3); //@取得画像のリサイズ
 	//src_img = undist(src_img) ; //@comment カメラの歪みをとる(GoPro魚眼)
 
@@ -118,18 +122,18 @@ int main(int argc, char *argv[])
 
 	int frame = 0; //@comment フレーム数保持変数
 
-	set_target(target, allTarget, dst_img);
+	set_target(target, allTarget);
 	target_itr = allTarget.begin();
 
 	while (1){
 
-		if (target_itr == allTarget.end()){
+		if (target_itr == allTarget.end()-1){
 			target_itr = allTarget.begin();
 		}
 
 		cap >> src_frame;
 
-		if (frame % 15 == 0){ //@comment　フレームの取得数を調節可能
+		if (frame % 1 == 0){ //@comment　フレームの取得数を調節可能
 
 			//@comment 画像をリサイズ(大きすぎるとディスプレイに入りらないため)
 			resize(src_frame, src_frame, Size(src_img_cols, src_img_rows), CV_8UC3);
@@ -172,7 +176,7 @@ int main(int argc, char *argv[])
 				std::cout << "UPDATE" << std::endl;
 					target_itr++;
 				}
-			action = move_direction(P0, P1, *target_itr);
+			action = robot_action(P0, P1, *target_itr);
 			std::cout << "target: " << target_itr->x << ", " << target_itr->y << "	position: " << P1.x << ", " << P1.y
 				<< is_out(P1) << action << std::endl;
 			}
@@ -386,24 +390,24 @@ void colorExtraction(cv::Mat* src, cv::Mat* dst,
 }
 
 //@comment ターゲット設定
-void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget, cv::Mat& dst_img){
+void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget){
 
-	int width = dst_img.rows;
-	int height = dst_img.cols;
+	int height = src_img_rows;
+	int width = src_img_cols;
 	allTarget.clear();
 
 	int n = 0;
-	for (int j = 0; j < (width / 100) - 2; j++){
+	for (int j = 0; j < (height/ 100) - 2; j++){
 		if (j % 2 == 0){
-			for (int i = 0; i < (height / 100) - 2; i++){
-				target.x = (i + 1) * width / (width / 100) + 50;	target.y = 800 - (j + 1) * height / (height / 100) - 50;
+			for (int i = 0; i < (width / 100) - 2; i++){
+				target.x = (i + 1) * width / (width / 100) + 50;	target.y = height - (j + 1) * height / (height / 100) - 50;
 				allTarget.push_back(target);
 				n++;
 			}
 		}
 		else{
-			for (int i = (height / 100) - 3; i >= 0; i--){
-				target.x = (i + 1) * width / (width / 100) + 50;	target.y = 800 - (j + 1) * height / (height / 100) - 50;
+			for (int i = (width / 100) - 3; i >= 0; i--){
+				target.x = (i + 1) * width / (width / 100) + 50;	target.y = height - (j + 1) * height / (height / 100) - 50;
 				allTarget.push_back(target);
 				n++;
 			}
@@ -412,7 +416,7 @@ void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget, cv::Mat
 }
 
 //@comment ロボットの動作決定関数
-std::string move_direction(cv::Point2i Current, cv::Point2i Previous, cv::Point2i Target){
+std::string robot_action(cv::Point2i Current, cv::Point2i Previous, cv::Point2i Target){
 	cv::Point2i P0 = Current - Previous;
 	cv::Point2i P1 = Target - Current;
 
