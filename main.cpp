@@ -7,7 +7,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 
-static const int src_img_rows = 700;
+static const int src_img_rows = 800;
 static const int src_img_cols = 800;
 
 using namespace cv;
@@ -21,6 +21,7 @@ double get_points_distance(Point2i, Point2i);
 void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget, cv::Mat& dst_img);
 std::string move_direction(cv::Point2i Current, cv::Point2i Previous, cv::Point2i Target);
 bool is_update_target(cv::Point2i Current, cv::Point2i Target);
+std::string is_out(cv::Point2i Robot);
 void colorExtraction(cv::Mat* src, cv::Mat* dst,
 	int code,
 	int ch1Lower, int ch1Upper,
@@ -47,7 +48,7 @@ Point2i target, P0 = { 0, 0 }, P1 = { 0, 0 };
 std::vector<Point2i> allTarget;
 std::vector<Point2i>::iterator target_itr;
 string action;
-
+Point2i a, b, c, d;	//内側領域の頂点
 
 int main(int argc, char *argv[])
 {
@@ -123,8 +124,7 @@ int main(int argc, char *argv[])
 	while (1){
 
 		if (target_itr == allTarget.end()){
-			std::cout << "oooooooooooooooooooooooooooooooooooout" << std::endl;
-			break;
+			target_itr = allTarget.begin();
 		}
 
 		cap >> src_frame;
@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
 			}
 
 			//---------------------ロボットの動作取得------------------------------------
-			P1.x = point.x;	P1.y = src_img_rows-ypos;
+			P1 = { point.x, src_img_rows - ypos };
 			if (target_itr != allTarget.end() &&P1.x != 0 && P1.y != 0 && P0.x != 0 && P0.y != 0){
 				line(dst_img, P1, P0, Scalar(255, 0, 0), 2, CV_AA);
 			if (is_update_target(P1, *target_itr)){
@@ -174,15 +174,15 @@ int main(int argc, char *argv[])
 				}
 			action = move_direction(P0, P1, *target_itr);
 			std::cout << "target: " << target_itr->x << ", " << target_itr->y << "	position: " << P1.x << ", " << P1.y
-				<< "	move: " << action << std::endl;
+				<< is_out(P1) << action << std::endl;
 			}
 			P0 = P1;
+
 			
 			//-------------------重心点のプロット----------------------------------------- 
 			if (!point.y == 0){ //@comment point.y == 0の場合はexceptionが起こる( 0除算 )
 				//@comment 画像，円の中心座標，半径，色(青)，線太さ，種類(-1, CV_AAは塗りつぶし)
 				circle(dst_img, Point(point.x, point.y + 6 * ((1000 / point.y) + 1)), 8, Scalar(0, 0, 0), -1, CV_AA);
-				cv::putText(dst_img, action, cv::Point(point.x, point.y + 6 * ((1000 / point.y) + 1)), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 0), 1.0, CV_AA);
 			}
 
 			//------------------ターゲットのプロット--------------------------------------
@@ -193,6 +193,9 @@ int main(int argc, char *argv[])
 				n++;
 			}
 			cv::circle(dst_img, cv::Point(*target_itr), 48, cv::Scalar(0, 0, 0), 3, 4);
+
+			cv::putText(dst_img, is_out(P1), cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 1.0, CV_AA);
+			cv::putText(dst_img, action, cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 1.0, CV_AA);
 
 			//---------------------表示部分----------------------------------------------
 
@@ -239,8 +242,6 @@ int main(int argc, char *argv[])
 		write << dst_img;
 	}
 	ofs.close(); //@comment ファイルストリームの解放
-
-	while (1){}
 }
 
 //@comment 2点間の距離取得関数
@@ -392,7 +393,7 @@ void set_target(cv::Point2i& targt, std::vector<cv::Point2i>& allTarget, cv::Mat
 	allTarget.clear();
 
 	int n = 0;
-	for (int j = 0; j < (width / 100) - 1; j++){
+	for (int j = 0; j < (width / 100) - 2; j++){
 		if (j % 2 == 0){
 			for (int i = 0; i < (height / 100) - 2; i++){
 				target.x = (i + 1) * width / (width / 100) + 50;	target.y = 800 - (j + 1) * height / (height / 100) - 50;
@@ -415,6 +416,9 @@ std::string move_direction(cv::Point2i Current, cv::Point2i Previous, cv::Point2
 	cv::Point2i P0 = Current - Previous;
 	cv::Point2i P1 = Target - Current;
 
+	int dx1 = abs(Current.x - 100);
+	int dx2 = abs(Current.x - src_img_rows-100);
+
 	double angle = asin(P0.cross(P1) / (sqrt(P0.x * P0.x + P0.y * P0.y) * sqrt(P1.x * P1.x + P1.y * P1.y))) / CV_PI * 180;
 	if (P0.dot(P1) >= 0){
 		if (P0.cross(P1) >= 0){
@@ -429,10 +433,16 @@ std::string move_direction(cv::Point2i Current, cv::Point2i Previous, cv::Point2
 		return std::string("f");
 	}
 	else if (angle <= -30){
-		return std::string("r");
+		if ((dx1 < 50.0) || (dx2 < 50.0)){
+			return std::string("r (fast)");
+		}
+		else return std::string("r (slow)");
 	}
 	else{
-		return std::string("l");
+		if ((dx1 < 50.0) || (dx2 < 50.0)){
+			return std::string("l (fast)");
+		}
+		else return std::string("l (slow)");
 	}
 }
 
@@ -443,11 +453,32 @@ bool is_update_target(cv::Point2i Current, cv::Point2i Target){
 	int dy = Current.y - Target.y;
 	double d = sqrt(dx * dx + dy * dy);
 
-	std::cout << "test " << d << endl;
-
 	if (d < 50.0){
-		std::cout << "TRUEEEEEEEEEEEEEEEEEEEE" << std::endl;
 		return true;
 	}
 	else return false;
+}
+
+std::string is_out(cv::Point2i Robot){
+	cv::Point2i A = { 100, src_img_rows - 100 }, B = { 100, 100 }, C = { src_img_cols - 100, 100 }, D = { src_img_cols - 100, src_img_rows - 100 };
+	cv::Point2i BA = A - B, BC = C - B, BP = Robot - B;
+	cv::Point2i DC = C - D, DA = A - D, DP = Robot - D;
+	int c1, c2, c3, c4;
+	bool flag1=false, flag2=false;
+
+	c1 = BA.cross(BP);
+	c2 = BP.cross(BC);
+	c3 = DC.cross(DP);
+	c4 = DP.cross(DA);
+
+	if ((c1 >= 0 && c2 >= 0) || (c1 < 0 && c2 < 0)){
+		flag1 = true;
+	}
+	if ((c3 >= 0 && c4 >= 0) || (c3< 0 && c4 < 0)){
+		flag2 = true;
+	}
+	if (flag1 && flag2){
+		return "IN";
+	}
+	else return "OUT";
 }
