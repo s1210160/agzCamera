@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
 
 
 		cap >> src_frame;
-		if (frame % 3 == 0) { //@comment　フレームの取得数を調節可能
+		if (frame % 1 == 0) { //@comment　フレームの取得数を調節可能
 			///////
 			//2.送受信バッファ初期化
 			Ret = SetupComm(arduino, 1024, 1024);
@@ -282,8 +282,9 @@ int main(int argc, char *argv[])
 			//変換(線形補完)
 			warpPerspective(src_frame, dst_img, perspective_matrix, Size(src_img_cols, src_img_rows), INTER_LINEAR);
 			//@comment hsvを利用して赤色を抽出
-			//入力画像、出力画像、変換、h最小値、h最大値、s最小値、s最大値、v最小値、v最大値
-			colorExtraction(&dst_img, &colorExtra, CV_BGR2HSV, 150, 180, 70, 255, 70, 255);
+			//入力画像、出力画像、変換、h最小値、h最大値、s最小値、s最大値、v最小値、v最大値 h:(0-180)実際の1/2
+			//colorExtraction(&dst_img, &colorExtra, CV_BGR2HSV, 150, 180, 70, 255, 70, 255);
+			colorExtraction(&dst_img, &colorExtra, CV_BGR2HSV, 145, 165,70, 255, 70, 255);
 			cvtColor(colorExtra, colorExtra, CV_BGR2GRAY);//@comment グレースケールに変換
 
 
@@ -308,22 +309,27 @@ int main(int argc, char *argv[])
 			}
 
 			//---------------------ロボットの動作取得------------------------------------
-			P1 = { point.x, src_img_rows - ypos };
-			if (target_itr != allTarget.end() && P1.x != 0 && P1.y != 0 && P0.x != 0 && P0.y != 0) {
-				line(dst_img, P1, P0, Scalar(255, 0, 0), 2, CV_AA);
-				if (is_update_target(P1, *target_itr)) {
-					// ターゲットの更新
-					//std::cout << "UPDATE" << std::endl;
-					target_itr++;
-					if (target_itr == allTarget.end()) {//@comment イテレータが最後まで行ったら最初に戻る
-						target_itr = allTarget.begin();
+			if (frame % 3){
+				P1 = { point.x, src_img_rows - ypos };
+				if (target_itr != allTarget.end() && P1.x != 0 && P1.y != 0 && P0.x != 0 && P0.y != 0 && point.x != 0 && point.y != 0) {
+					line(dst_img, P1, P0, Scalar(255, 0, 0), 2, CV_AA);
+					if (is_update_target(P1, *target_itr)) {
+						// ターゲットの更新
+						//std::cout << "UPDATE" << std::endl;
+						target_itr++;
+						if (target_itr == allTarget.end()) {//@comment イテレータが最後まで行ったら最初に戻る
+							target_itr = allTarget.begin();
+						}
 					}
+					action = robot_action(P0, P1, *target_itr);
+					//std::cout << "target: " << target_itr->x << ", " << target_itr->y << "	position: " << P1.x << ", " << P1.y
+					//<< is_out(P1) << action << std::endl;
 				}
-				action = robot_action(P0, P1, *target_itr);
-				//std::cout << "target: " << target_itr->x << ", " << target_itr->y << "	position: " << P1.x << ", " << P1.y
-				//<< is_out(P1) << action << std::endl;
+				else{
+					action = 0;
+				}
+				P0 = P1;
 			}
-			P0 = P1;
 
 			if (command == 'a'){
 				sentAigamoCommand(action);
