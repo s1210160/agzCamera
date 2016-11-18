@@ -32,8 +32,8 @@ S = byte(0x53), T = byte(0x54), U = byte(0x55), V = byte(0x56), W = byte(0x57), 
 Y = byte(0x59), Z = byte(0x5a);
 
 //モードごとのleftとrightのpwm
-byte lPwm[] = { byte(0x00), byte(0x18), byte(0x18), byte(0x18), byte(0x01), byte(0x00), byte(0x10), byte(0x10), byte(0x0c), byte(0x0c) };
-byte rPwm[] = { byte(0x00), byte(0x18), byte(0x01), byte(0x00), byte(0x18), byte(0x18), byte(0x0c), byte(0x08), byte(0x0c), byte(0x08) };
+byte lPwm[] = { byte(0x00), byte(0x18), byte(0x18), byte(0x18), byte(0x08), byte(0x00), byte(0x10), byte(0x10), byte(0x0c), byte(0x0c) };
+byte rPwm[] = { byte(0x00), byte(0x18), byte(0x08), byte(0x00), byte(0x18), byte(0x18), byte(0x0c), byte(0x08), byte(0x0c), byte(0x08) };
 
 
 int src_img_cols = 0; //width
@@ -42,7 +42,6 @@ int src_img_rows = 0; //height
 
 using namespace cv;
 using namespace std;
-
 
 Point2i calculate_center(Mat);
 void getCoordinates(int event, int x, int y, int flags, void* param);
@@ -77,7 +76,7 @@ ofstream ofs("out4.csv");
 //@動画出力用変数
 const string  str = "test.avi";
 
-Point2i target, P0 = { 0, 0 }, P1 = { 0, 0 };
+Point2i target, P0[5] = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } }, P1 = { 0, 0 };
 std::vector<Point2i> allTarget;
 std::vector<Point2i>::iterator target_itr;
 int action;
@@ -283,8 +282,8 @@ int main(int argc, char *argv[])
 			warpPerspective(src_frame, dst_img, perspective_matrix, Size(src_img_cols, src_img_rows), INTER_LINEAR);
 			//@comment hsvを利用して赤色を抽出
 			//入力画像、出力画像、変換、h最小値、h最大値、s最小値、s最大値、v最小値、v最大値 h:(0-180)実際の1/2
-			//colorExtraction(&dst_img, &colorExtra, CV_BGR2HSV, 150, 180, 70, 255, 70, 255);
-			colorExtraction(&dst_img, &colorExtra, CV_BGR2HSV, 145, 165,70, 255, 70, 255);
+			colorExtraction(&dst_img, &colorExtra, CV_BGR2HSV, 160, 180, 70, 255, 70, 255);
+			//colorExtraction(&dst_img, &colorExtra, CV_BGR2HSV, 145, 165,70, 255, 70, 255);
 			cvtColor(colorExtra, colorExtra, CV_BGR2GRAY);//@comment グレースケールに変換
 
 
@@ -309,10 +308,10 @@ int main(int argc, char *argv[])
 			}
 
 			//---------------------ロボットの動作取得------------------------------------
-			if (frame % 3){
+			//if (frame % 2 == 0){
 				P1 = { point.x, src_img_rows - ypos };
-				if (target_itr != allTarget.end() && P1.x != 0 && P1.y != 0 && P0.x != 0 && P0.y != 0 && point.x != 0 && point.y != 0) {
-					line(dst_img, P1, P0, Scalar(255, 0, 0), 2, CV_AA);
+				if (target_itr != allTarget.end() && P1.x != 0 && P1.y != 0 && point.x != 0 && point.y != 0) {
+					line(dst_img, P1, P0[4], Scalar(255, 0, 0), 2, CV_AA);
 					if (is_update_target(P1, *target_itr)) {
 						// ターゲットの更新
 						//std::cout << "UPDATE" << std::endl;
@@ -321,15 +320,19 @@ int main(int argc, char *argv[])
 							target_itr = allTarget.begin();
 						}
 					}
-					action = robot_action(P0, P1, *target_itr);
+					action = robot_action(P0[4], P1, *target_itr);
 					//std::cout << "target: " << target_itr->x << ", " << target_itr->y << "	position: " << P1.x << ", " << P1.y
 					//<< is_out(P1) << action << std::endl;
+
+					for (int i = 1; i < 5; i++){
+						P0[i] = P0[i - 1];
+					}
 				}
 				else{
 					action = 0;
 				}
-				P0 = P1;
-			}
+				P0[0] = P1;
+			//}
 
 			if (command == 'a'){
 				sentAigamoCommand(action);
